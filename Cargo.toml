@@ -3,3 +3,6 @@
 name = "dual_numbers"
 version = "0.0.1"
 authors = ["Filip Szczepański <jazz2rulez@gmail.com>"]
+
+[dependencies]
+num = "*"

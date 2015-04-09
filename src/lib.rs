@@ -1,6 +1,7 @@
-#![feature(core, std_misc)]
+extern crate num;
 
-use std::num::*;
+use num::traits::*;
+
 use std::ops::*;
 
 #[derive(Copy, Clone, PartialOrd, PartialEq, Debug)]
@@ -92,10 +93,36 @@ impl<T: Rem<Output = T> + Copy> Rem for Dual<T> {
     }
 }
 
+impl<T: Zero> Zero for Dual<T> {
+    fn zero() -> Self {
+        Dual(T::zero(), T::zero())
+    }
+
+    fn is_zero(&self) -> bool {
+        self.0.is_zero()
+    }
+}
+
+impl<T: Zero + One + Copy> One for Dual<T> {
+    fn one() -> Self {
+        Dual(T::one(), T::zero())
+    }
+}
+
+impl<T: Num + Copy> Num for Dual<T> {
+    type FromStrRadixErr = <T as Num>::FromStrRadixErr;
+    fn from_str_radix(string: &str, radix: u32) -> Result<Self, <Self as Num>::FromStrRadixErr> {
+        Ok(Dual (
+            try!(T::from_str_radix(string, radix)),
+            T::zero()
+        ))
+    }
+}
+
 macro_rules! float_impl_basic {
-    ($($name:ident),*) => {
+    ($ty:ty, $($name:ident),*) => {
         $(fn $name() -> Self {
-            Dual(Float::$name(), Float::zero())
+            Dual(<$ty as Float>::$name(), <$ty as Zero>::zero())
         })*
     }
 }
@@ -116,19 +143,11 @@ macro_rules! float_impl_passthrough {
     }
 }
 
-#[allow(deprecated)]
 impl<T: Float> Float for Dual<T> {
-    float_impl_basic!(nan, infinity, neg_infinity, zero, neg_zero, one,
-                      epsilon, min_value, max_value);
-    float_unused_self!(T, usize, mantissa_digits, digits);
-    float_unused_self!(T, isize, min_exp, max_exp, min_10_exp, max_10_exp);
-
-    fn min_pos_value(_: Option<Self>) -> Self {
-        Dual(T::min_pos_value(None), T::zero())
-    }
-
+    float_impl_basic!(T, nan, infinity, neg_infinity, neg_zero,
+                      min_value, max_value);
     float_impl_passthrough!(bool, is_nan, is_infinite, is_finite,
-                            is_normal, is_positive, is_negative);
+                            is_normal, is_sign_positive, is_sign_negative);
     float_impl_passthrough!((u64, i16, i8), integer_decode);
     float_impl_passthrough!(::std::num::FpCategory, classify);
 
@@ -165,7 +184,7 @@ impl<T: Float> Float for Dual<T> {
     }
 
     fn recip(self) -> Self {
-        Float::one() / self
+        Dual::one() / self
     }
 
     fn powi(self, n: i32) -> Self {
@@ -180,11 +199,6 @@ impl<T: Float> Float for Dual<T> {
     fn sqrt(self) -> Self {
         let real = self.0.sqrt();
         Dual(real, self.1 / (T::from(2).unwrap() * real))
-    }
-
-    fn rsqrt(self) -> Self {
-        let real = self.0.rsqrt();
-        Dual(real, (-self.1 * real)/(T::from(2).unwrap()*self.0))
     }
 
     fn exp(self) -> Self {
@@ -211,27 +225,6 @@ impl<T: Float> Float for Dual<T> {
 
     fn log10(self) -> Self {
         Dual(self.0.log10(), self.1 / (self.0 * T::from(10).unwrap().ln()))
-    }
-
-    fn to_degrees(self) -> Self {
-        Dual(self.0.to_degrees(), self.1.to_degrees())
-    }
-
-    fn to_radians(self) -> Self {
-        Dual(self.0.to_radians(), self.1.to_radians())
-    }
-
-    fn ldexp(x: Self, exp: isize) -> Self {
-        Dual(T::ldexp(x.0, exp), T::ldexp(x.1, exp))
-    }
-
-    fn frexp(self) -> (Self, isize) {
-        let (real, exp) = self.0.frexp();
-        (Dual(real, T::ldexp(self.1, -exp)), exp)
-    }
-
-    fn next_after(self, other: Self) -> Self {
-        Dual(self.0.next_after(other.0), self.1) // The epsilon is not strictly accurate, but close.
     }
 
     fn max(self, other: Self) -> Self {
